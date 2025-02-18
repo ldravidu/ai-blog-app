@@ -1,31 +1,33 @@
 services:
-  web:
+  app:
     build: .
-    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
     ports:
       - "8000:8000"
+    restart: on-failure
     depends_on:
+      ai-blog-db:
+        condition: service_healthy
+    links:
       - ai-blog-db
     networks:
       - app-network
 
   ai-blog-db:
     image: postgres
-    restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: ai-blog-db
     ports:
-      - 5432:5432
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+      - "5432:5432"
     networks:
       - app-network
-
-volumes:
-  pgdata:
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "ai-blog-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      
 networks:
   app-network:
     driver: bridge
