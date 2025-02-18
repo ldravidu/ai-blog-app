@@ -171,4 +171,4 @@ cython_debug/
 .pypirc
 
 # settings file
-ai_blog_app/setting.py
+ai_blog_app/settings.py
