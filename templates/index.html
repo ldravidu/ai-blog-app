@@ -12,6 +12,7 @@
             from {
                 transform: rotate(0deg);
             }
+
             to {
                 transform: rotate(360deg);
             }
@@ -21,6 +22,7 @@
             from {
                 -webkit-transform: rotate(0deg);
             }
+
             to {
                 -webkit-transform: rotate(360deg);
             }
@@ -46,7 +48,6 @@
             animation-iteration-count: infinite;
             animation-timing-function: linear;
         }
-
     </style>
 </head>
 
@@ -82,8 +83,10 @@
             <div>
                 <h2 class="text-xl mb-4 font-semibold">Enter YouTube Video Link</h2>
                 <div class="flex space-x-2">
-                    <input id="youtubeLink" type="url" placeholder="Paste YouTube link here" class="flex-grow p-2 border border-gray-300 rounded-md hover:border-blue-400 transition-colors">
-                    <button id="generateBlogButton" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">Generate</button>
+                    <input id="youtubeLink" type="url" placeholder="Paste YouTube link here"
+                        class="flex-grow p-2 border border-gray-300 rounded-md hover:border-blue-400 transition-colors">
+                    <button id="generateBlogButton"
+                        class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">Generate</button>
                 </div>
             </div>
 
@@ -100,7 +103,42 @@
     </div>
 
     <script>
-        
+        document.getElementById('generateBlogButton').addEventListener('click', async () => {
+            const youtubeLink = document.getElementById('youtubeLink').value;
+            const loadingIndicator = document.getElementById('loading');
+            const blogContent = document.getElementById('blogContent');
+
+            if (youtubeLink) {
+                document.getElementById('loading-circle').style.display = 'block';
+                loadingIndicator.classList.remove('hidden');
+                blogContent.innerHTML = ''; // Clear previous content
+
+                const endpointUrl = '/generate-blog';
+
+                try {
+                    const response = await fetch(endpointUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ link: youtubeLink })
+                    });
+
+                    const data = await response.json();
+
+                    blogContent.innerHTML = data.content;
+                    loadingIndicator.classList.add('hidden');
+
+                } catch (error) {
+                    console.error("Error occurred: ", error);
+                    alert("Something went wrong. Please try again later.");
+                    loadingIndicator.classList.add('hidden');
+                }
+                document.getElementById('loading-circle').style.display = 'none';
+            } else {
+                alert("Please enter a YouTube link.");
+            }
+        });
     </script>
 </body>
 
