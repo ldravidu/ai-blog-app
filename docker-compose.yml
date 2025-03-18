@@ -20,6 +20,8 @@ services:
       POSTGRES_DB: ai-blog-db
     ports:
       - "5432:5432"
+    volumes:
+      - ai-blog-db-data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -31,3 +33,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  ai-blog-db-data:
