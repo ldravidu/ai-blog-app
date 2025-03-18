@@ -2,14 +2,25 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect, render
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse
+import json
 
 # Create your views here.
 @login_required(login_url='/login')
 def index(request):
     return render(request, 'index.html')
 
+@csrf_exempt
 def generate_blog(request):
-    pass
+    if (request.method == 'POST'):
+        try:
+            data = json.loads(request.body)
+            yt_link = data['link']
+        except (KeyError, json.JSONDecodeError):
+            return JsonResponse({'error': 'Invalid data'}, status=400)
+    else:
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
 
 def user_login(request):
     if request.method == 'POST':
