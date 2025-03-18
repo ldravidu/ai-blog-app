@@ -17,6 +17,7 @@ def generate_blog(request):
         try:
             data = json.loads(request.body)
             yt_link = data['link']
+            return JsonResponse({'content': yt_link})
         except (KeyError, json.JSONDecodeError):
             return JsonResponse({'error': 'Invalid data'}, status=400)
     else:
