@@ -8,13 +8,13 @@ import json
 from urllib.error import HTTPError
 from django.conf import settings
 import assemblyai as aai
-from openai import OpenAI
 import os
 from yt_dlp import YoutubeDL
 import logging
 import hashlib
 import pickle
 import time
+from huggingface_hub import InferenceClient
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -55,13 +55,7 @@ def generate_blog(request):
             return JsonResponse({"error": "Failed to generate blog"}, status=500)
 
         # Return blog article as a response
-        return JsonResponse(
-            {
-                "title": title,
-                "transcript": transcript,
-                "blog": blog_content,
-            }
-        )
+        return JsonResponse({"content": blog_content})
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
 
@@ -144,42 +138,24 @@ def download_audio(link):
 
 def generate_blog_from_transcript(transcript):
     try:
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)  # Initialize OpenAI client
-        prompt = f"Based on the following transcript from a YouTube video, write a comprehensive blog article. Write it based on the transcript, but don't make it look like a YouTube video. Make it look like a proper blog article:\n\n{transcript}\n\nArticle:"
+        client = InferenceClient(
+            provider="hf-inference", api_key=settings.HUGGINGFACE_API_KEY
+        )
 
-        retries = 3
-        delay = 10
+        # Prepare the prompt
+        prompt = f"Based on the following transcript from a YouTube video, write a comprehensive blog article. Write it based on the transcript, but don't make it look like a YouTube video. Make it look like a proper blog article:\n\n{transcript}"
 
-        for attempt in range(retries):
-            try:
-                completion = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt,
-                        }
-                    ],
-                )
-                return completion.choices[0].message.content.strip()
-            except OpenAI.RateLimitError:
-                if attempt < retries - 1:
-                    logging.warning(
-                        f"Rate limit exceeded. Retrying in {delay} seconds..."
-                    )
-                    time.sleep(delay)
-                    delay *= 2  # Exponential backoff
-                else:
-                    logging.error(
-                        "Max retries reached. OpenAI API is still rate-limited."
-                    )
-                    return None
-            except Exception as e:
-                logging.error(f"Error generating blog: {e}")
-                return None
-        return None
+        result = client.text_generation(model="google/gemma-2-2b-it", prompt=prompt)
+
+        # Generate the blog content
+        generated_text = result.strip()
+
+        # logging.debug(f"Generated blog content: {generated_text}")
+
+        # Return the generated blog content
+        return generated_text
     except Exception as e:
-        logging.error(f"Error generating blog: {e}")
+        logging.error(f"Unexpected error: {e}")
         return None
 
 

@@ -106,7 +106,6 @@
         document.getElementById('generateBlogButton').addEventListener('click', async () => {
             const youtubeLink = document.getElementById('youtubeLink').value;
             // const loadingIndicator = document.getElementById('loading');
-            const blogContent = document.getElementById('blogContent');
 
             if (youtubeLink) {
                 document.getElementById('loading-circle').style.display = 'block';
@@ -127,6 +126,8 @@
                     const data = await response.json();
 
                     blogContent.innerHTML = data.content;
+                    document.getElementById('blogSection').style.display = 'block';
+
                     // loadingIndicator.classList.add('hidden');
 
                 } catch (error) {
