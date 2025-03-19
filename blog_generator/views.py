@@ -12,8 +12,16 @@ from openai import OpenAI
 import os
 from yt_dlp import YoutubeDL
 import logging
+import hashlib
+import pickle
+import time
 
 logging.basicConfig(level=logging.DEBUG)
+
+TRANSCRIPT_CACHE_DIR = os.path.join(settings.MEDIA_ROOT, "transcripts")
+
+if not os.path.exists(TRANSCRIPT_CACHE_DIR):
+    os.makedirs(TRANSCRIPT_CACHE_DIR)
 
 
 # Create your views here.
@@ -70,6 +78,16 @@ def yt_title(yt_link):
 
 def get_transcript(link):
     try:
+        # Create a unique cache filename using a hash
+        video_hash = hashlib.md5(link.encode()).hexdigest()
+        cache_file = os.path.join(TRANSCRIPT_CACHE_DIR, f"{video_hash}.pkl")
+
+        # Check if transcript already exists
+        if os.path.exists(cache_file):
+            with open(cache_file, "rb") as f:
+                cached_data = pickle.load(f)
+            return cached_data
+
         # Download audio
         audio_file = download_audio(link)
         if not audio_file:
@@ -78,13 +96,17 @@ def get_transcript(link):
         # Transcribe audio using AssemblyAI
         aai.settings.api_key = settings.ASSEMBLYAI_API_KEY
         transcriber = aai.Transcriber()
-        transcript = transcriber.transcribe(audio_file)
+        transcript = transcriber.transcribe(audio_file).text
+
+        # Save transcript to cache
+        with open(cache_file, "wb") as f:
+            pickle.dump(transcript, f)
 
         # Clean up the downloaded audio file
         if os.path.exists(audio_file):
             os.remove(audio_file)
 
-        return transcript.text
+        return transcript
     except Exception as e:
         logging.error(f"Error fetching transcript: {e}")
         return None
@@ -108,7 +130,13 @@ def download_audio(link):
             info = ydl.extract_info(link, download=True)
             audio_file = ydl.prepare_filename(info)
             base, ext = os.path.splitext(audio_file)
-            return base + ".mp3"
+            audio_path = base + ".mp3"
+
+            # Check if the file exists before returning
+            if os.path.exists(audio_path):
+                return audio_path
+            else:
+                return None
     except Exception as e:
         logging.error(f"Error downloading audio: {e}")
         return None
@@ -119,18 +147,37 @@ def generate_blog_from_transcript(transcript):
         client = OpenAI(api_key=settings.OPENAI_API_KEY)  # Initialize OpenAI client
         prompt = f"Based on the following transcript from a YouTube video, write a comprehensive blog article. Write it based on the transcript, but don't make it look like a YouTube video. Make it look like a proper blog article:\n\n{transcript}\n\nArticle:"
 
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-        )
+        retries = 3
+        delay = 10
 
-        generated_content = completion.choices[0].message.content.strip()
-        return generated_content
+        for attempt in range(retries):
+            try:
+                completion = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                )
+                return completion.choices[0].message.content.strip()
+            except OpenAI.RateLimitError:
+                if attempt < retries - 1:
+                    logging.warning(
+                        f"Rate limit exceeded. Retrying in {delay} seconds..."
+                    )
+                    time.sleep(delay)
+                    delay *= 2  # Exponential backoff
+                else:
+                    logging.error(
+                        "Max retries reached. OpenAI API is still rate-limited."
+                    )
+                    return None
+            except Exception as e:
+                logging.error(f"Error generating blog: {e}")
+                return None
+        return None
     except Exception as e:
         logging.error(f"Error generating blog: {e}")
         return None
