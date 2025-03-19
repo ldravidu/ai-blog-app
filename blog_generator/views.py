@@ -5,11 +5,15 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
-from pytube import YouTube
+from urllib.error import HTTPError
 from django.conf import settings
 import assemblyai as aai
-import openai
+from openai import OpenAI
 import os
+from yt_dlp import YoutubeDL
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 # Create your views here.
@@ -27,8 +31,10 @@ def generate_blog(request):
         except (KeyError, json.JSONDecodeError):
             return JsonResponse({"error": "Invalid data"}, status=400)
 
-        # Get Youtube video title
+        # Get YouTube video title
         title = yt_title(yt_link)
+        if not title:
+            return JsonResponse({"error": "Failed to fetch video title"}, status=500)
 
         # Get transcript
         transcript = get_transcript(yt_link)
@@ -37,11 +43,8 @@ def generate_blog(request):
 
         # Use OpenAI to generate blog
         blog_content = generate_blog_from_transcript(transcript)
-
         if not blog_content:
             return JsonResponse({"error": "Failed to generate blog"}, status=500)
-
-        # Save blog article to database
 
         # Return blog article as a response
         return JsonResponse(
@@ -55,44 +58,82 @@ def generate_blog(request):
         return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
-def yt_title(link):
-    yt = YouTube(link)
-    return yt.title
+def yt_title(yt_link):
+    try:
+        ydl = YoutubeDL()
+        info = ydl.extract_info(yt_link, download=False)
+        return info.get("title", None)
+    except Exception as e:
+        logging.error(f"Error fetching video title: {e}")
+        return None
 
 
 def get_transcript(link):
-    audio_file = download_audio(link)
-    aai.settings.api_key = settings.ASSEMBLYAI_API_KEY
+    try:
+        # Download audio
+        audio_file = download_audio(link)
+        if not audio_file:
+            return None
 
-    transcriber = aai.Transcriber()
-    transcript = transcriber.transcribe(audio_file)
+        # Transcribe audio using AssemblyAI
+        aai.settings.api_key = settings.ASSEMBLYAI_API_KEY
+        transcriber = aai.Transcriber()
+        transcript = transcriber.transcribe(audio_file)
 
-    return transcriber.text
+        # Clean up the downloaded audio file
+        if os.path.exists(audio_file):
+            os.remove(audio_file)
+
+        return transcript.text
+    except Exception as e:
+        logging.error(f"Error fetching transcript: {e}")
+        return None
 
 
 def download_audio(link):
-    audio_file = (
-        YouTube(link)
-        .streams.filter(only_audio=True)
-        .first()
-        .download(output_path=settings.MEDIA_ROOT)
-    )
-    base, ext = os.path.splitext(audio_file)
-    new_file = base + ".mp3"
-    os.rename(audio_file, new_file)
-    return new_file
+    try:
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": os.path.join(settings.MEDIA_ROOT, "%(title)s.%(ext)s"),
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }
+            ],
+            "ffmpeg_location": "/usr/bin/ffmpeg",
+        }
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(link, download=True)
+            audio_file = ydl.prepare_filename(info)
+            base, ext = os.path.splitext(audio_file)
+            return base + ".mp3"
+    except Exception as e:
+        logging.error(f"Error downloading audio: {e}")
+        return None
 
 
 def generate_blog_from_transcript(transcript):
-    openai.api_key = settings.OPENAI_API_KEY
+    try:
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)  # Initialize OpenAI client
+        prompt = f"Based on the following transcript from a YouTube video, write a comprehensive blog article. Write it based on the transcript, but don't make it look like a YouTube video. Make it look like a proper blog article:\n\n{transcript}\n\nArticle:"
 
-    prompt = f"Based on the following transcript from a YouTube video, write a comprehensive blog article, write it based on the transcript, but don't make it look like a youtube video. Make it look like a proper blog article:\n\n{transcript}\n\nArticle:"
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+        )
 
-    response = openai.Completion.create(model="gpt-4o", prompt=prompt, max_tokens=1000)
-
-    generated_content = response.choices[0].text.strip()
-
-    return generated_content
+        generated_content = completion.choices[0].message.content.strip()
+        return generated_content
+    except Exception as e:
+        logging.error(f"Error generating blog: {e}")
+        return None
 
 
 def user_login(request):
@@ -125,10 +166,10 @@ def user_signup(request):
                 user.save()
                 login(request, user)
                 return redirect("/")
-            except:
+            except Exception as e:
+                logging.error(f"Error creating account: {e}")
                 error_message = "Error creating account"
                 return render(request, "signup.html", {"error_message": error_message})
-
         else:
             error_message = "Passwords do not match"
             return render(request, "signup.html", {"error_message": error_message})

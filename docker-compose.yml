@@ -11,6 +11,8 @@ services:
       - ai-blog-db
     networks:
       - app-network
+    volumes:
+      - .:/app
 
   ai-blog-db:
     image: postgres
