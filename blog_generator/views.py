@@ -14,6 +14,7 @@ import logging
 import hashlib
 import pickle
 import time
+from .models import BlogPost
 from huggingface_hub import InferenceClient
 
 logging.basicConfig(level=logging.DEBUG)
@@ -53,6 +54,15 @@ def generate_blog(request):
         blog_content = generate_blog_from_transcript(transcript)
         if not blog_content:
             return JsonResponse({"error": "Failed to generate blog"}, status=500)
+
+        # Save blog to database
+        new_blog_article = BlogPost.objects.create(
+            user=request.user,
+            youtube_title=title,
+            youtube_link=yt_link,
+            generated_content=blog_content,
+        )
+        new_blog_article.save()
 
         # Return blog article as a response
         return JsonResponse({"content": blog_content})
@@ -157,6 +167,19 @@ def generate_blog_from_transcript(transcript):
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
         return None
+
+
+def blog_history(request):
+    blog_posts = BlogPost.objects.filter(user=request.user)
+    return render(request, "blog-history.html", {"blog_posts": blog_posts})
+
+
+def blog_details(request, pk):
+    blog_post = BlogPost.objects.get(id=pk)
+    if request.user == blog_post.user:
+        return render(request, "blog-details.html", {"blog_post": blog_post})
+    else:
+        return redirect("/")
 
 
 def user_login(request):

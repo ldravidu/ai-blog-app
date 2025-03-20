@@ -14,6 +14,8 @@
             <h1 class="text-3xl font-bold">AI Blog Generator</h1>
         </div>
         <div>
+            <p class="text-white">Welcome, {{user.username}}</p>
+            <a href="/blog-history" class="text-white hover:underline mx-4">Saved Blog Posts</a>
             <a href="#" class="text-white hover:underline">Logout</a>
         </div>
     </nav>
@@ -24,13 +26,13 @@
             <section>
                 <h2 class="text-xl mb-4 font-semibold">Blog Article Details</h2>
                 <div class="border border-gray-300 p-4 rounded-lg">
-                    <h3 class="text-lg font-semibold">Blog Post Title</h3>
-                    <p>Content of the blog post</p>
+                    <h3 class="text-lg font-semibold">{{blog_post.youtube_title}}</h3>
+                    <p>{{blog_post.generated_content}}</p>
                     <hr class="my-4 border-gray-300">
                     <h4 class="text-lg font-semibold">YouTube Title</h4>
-                    <p class="text-gray-700">Title of the YouTube video</p>
+                    <p class="text-gray-700">{{blog_post.youtube_title}}</p>
                     <h4 class="text-lg font-semibold mt-4">YouTube Link</h4>
-                    <a href="#" class="text-blue-600 hover:underline">https://www.youtube.com</a>
+                    <a href="{{blog_post.youtube_link}}" class="text-blue-600 hover:underline">{{blog_post.youtube_link}}</a>
                 </div>
             </section>
         </div>
